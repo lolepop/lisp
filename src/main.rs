@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use env::{Env, EnvType};
+use env::{Env, EnvType, EnvId, EnvManager};
 
 mod env;
 
@@ -14,6 +14,13 @@ impl Node {
         match self {
             Node::Symbol(a) => a,
             _ => panic!("node is constant"),
+        }
+    }
+
+    fn resolve(&self, env_manager: &EnvManager, env_id: &EnvId) -> Option<EnvType> {
+        match self {
+            Node::Symbol(s) => env_manager.find_var(env_id, s).and_then(|id| env_manager.get(&id).get(s)),
+            Node::Number(c) => Some(EnvType::Number(*c)),
         }
     }
 }
@@ -116,17 +123,12 @@ impl Parser {
         // todo!()
     }
 
-    fn to_var(env: &Env, n: &Node) -> Option<EnvType> {
-        match n {
-            Node::Symbol(s) => env.get(s),
-            Node::Number(c) => Some(EnvType::Number(*c)),
-        }
-    }
+    fn eval(ast: &Ast, env_manager: &mut EnvManager, env_id: EnvId) -> Option<EnvType> {
+        // let env = env_manager.env(&env_id);
 
-    fn eval(ast: &Ast, env: &mut Env) -> Option<EnvType> {
         // resolve var if can no longer traverse
         if let AstNode::Leaf(n) = ast {
-            let val = Self::to_var(env, n);
+            let val = n.resolve(env_manager, &env_id);
             if val.is_none() {
                 // string literal not found in env
                 panic!("instruction not found: {:?}", n);
@@ -142,7 +144,8 @@ impl Parser {
         if let AstNode::Leaf(n) = t {
             match n.unwrap_symbol().as_str() {
                 "define" => {
-                    let v = Self::eval(&body[2], env).unwrap();
+                    let v = Self::eval(&body[2], env_manager, env_id).unwrap();
+                    let env = env_manager.get_mut(&env_id);
                     env.set(body[1].unwrap_leaf().unwrap_symbol().clone(), v);
                     return None;
                 },
@@ -150,10 +153,10 @@ impl Parser {
             }
         }
 
-        let proc_ret = Self::eval(t, env);
+        let proc_ret = Self::eval(t, env_manager, env_id);
         // library functions defined outside env
         if let Some(EnvType::NativeProc(name)) = proc_ret {
-            let args = body[1..].iter().map(|a| Self::eval(a, env).unwrap()).collect();
+            let args = body[1..].iter().map(|a| Self::eval(a, env_manager, env_id).unwrap()).collect();
             let ret = Env::native_call(&name, args);
             return Some(ret.unwrap());
         }
@@ -170,9 +173,10 @@ fn main() {
     let ast = Parser::parse(&mut tokens);
     println!("{ast:#?}");
 
-    let mut env = Env::std();
+    let mut env_manager = EnvManager::new();
+    let root_env = env_manager.std_env();
     for n in ast {
-        let res = Parser::eval(&n, &mut env);
+        let res = Parser::eval(&n, &mut env_manager, root_env);
         println!("{:?}", res);
     }
 }
