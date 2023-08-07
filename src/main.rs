@@ -17,7 +17,7 @@ impl Node {
         }
     }
 
-    fn resolve(&self, env_manager: &EnvManager, env_id: &EnvId) -> Option<EnvType> {
+    fn resolve<'a>(&self, env_manager: &EnvManager<'a>, env_id: &EnvId) -> Option<EnvType<'a>> {
         match self {
             Node::Symbol(s) => env_manager.find_var(env_id, s).and_then(|id| env_manager.get(&id).get(s)),
             Node::Number(c) => Some(EnvType::Number(*c)),
@@ -123,7 +123,7 @@ impl Parser {
         // todo!()
     }
 
-    fn eval(ast: &Ast, env_manager: &mut EnvManager, env_id: EnvId) -> Option<EnvType> {
+    fn eval<'a>(ast: &'a Ast, env_manager: &mut EnvManager<'a>, env_id: EnvId) -> Option<EnvType<'a>> {
         // let env = env_manager.env(&env_id);
 
         // resolve var if can no longer traverse
@@ -175,8 +175,8 @@ fn main() {
 
     let mut env_manager = EnvManager::new();
     let root_env = env_manager.std_env();
-    for n in ast {
-        let res = Parser::eval(&n, &mut env_manager, root_env);
+    for n in &ast {
+        let res = Parser::eval(n, &mut env_manager, root_env);
         println!("{:?}", res);
     }
 }

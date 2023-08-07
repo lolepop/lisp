@@ -4,19 +4,25 @@ use rustc_hash::FxHashMap;
 
 use crate::Ast;
 
-type ArgStack = Vec<EnvType>;
+type ArgStack<'a> = Vec<EnvType<'a>>;
 
 #[derive(Debug)]
-struct ProcInfo<'a> {
+pub struct ProcInfo<'a> {
     args: u8,
     body: &'a Ast,
-    captured: EnvId, // need to make env have interior mutability
+    captured: EnvId,
+}
+
+impl<'a> Clone for ProcInfo<'a> {
+    fn clone(&self) -> Self {
+        Self { args: self.args.clone(), body: self.body, captured: self.captured.clone() }
+    }
 }
 
 #[derive(Debug, Clone)]
-pub enum EnvType {
+pub enum EnvType<'a> {
     Number(f64),
-    // Proc(String, ProcInfo<'a>),
+    Proc(String, ProcInfo<'a>),
     NativeProc(String),
     // List(Vec<EnvType>),
 }
@@ -25,13 +31,13 @@ pub enum EnvType {
 pub struct EnvId(usize);
 
 #[derive(Debug)]
-pub struct EnvManager {
+pub struct EnvManager<'a> {
     parents: FxHashMap<usize, EnvId>,
-    envs: FxHashMap<usize, Env>,
+    envs: FxHashMap<usize, Env<'a>>,
     counter: usize
 }
 
-impl EnvManager {
+impl<'a> EnvManager<'a> {
     pub fn new() -> Self {
         Self {
             parents: FxHashMap::default(),
@@ -53,11 +59,11 @@ impl EnvManager {
         }
     }
 
-    pub fn get(&self, id: &EnvId) -> &Env {
+    pub fn get(&self, id: &EnvId) -> &Env<'a> {
         &self.envs[&id.0]
     }
 
-    pub fn get_mut(&mut self, id: &EnvId) -> &mut Env {
+    pub fn get_mut(&mut self, id: &EnvId) -> &mut Env<'a> {
         self.envs.get_mut(&id.0).unwrap()
     }
 
@@ -70,20 +76,20 @@ impl EnvManager {
     }
 
     pub fn std_env(&mut self) -> EnvId {
-        let mut env = self.new_env(None);
+        let env = self.new_env(None);
         self.get_mut(&env).std();
         env
     }
 }
 
 #[derive(Debug)]
-pub struct Env {
+pub struct Env<'a> {
     id: EnvId,
     parent: Option<EnvId>,
-    variables: FxHashMap<String, EnvType>,
+    variables: FxHashMap<String, EnvType<'a>>,
 }
 
-impl Env {
+impl<'a> Env<'a> {
     pub fn new(id: EnvId, parent: Option<EnvId>) -> Self {
         Self { id, parent, variables: FxHashMap::default() }
     }
@@ -98,7 +104,7 @@ impl Env {
         self.set("pi".to_string(), EnvType::Number(std::f64::consts::PI));
     }
 
-    pub fn native_call(name: &String, args: ArgStack) -> Result<EnvType, String> {
+    pub fn native_call(name: &String, args: ArgStack<'a>) -> Result<EnvType<'a>, String> {
         match name.as_str() {
             "*" => {
                 let [a, b] = &args[..] else { return Err("incorrect args".to_string()); };
@@ -116,11 +122,11 @@ impl Env {
         }
     }
 
-    pub fn set(&mut self, name: String, val: EnvType) {
+    pub fn set(&mut self, name: String, val: EnvType<'a>) {
         self.variables.insert(name, val);
     }
 
-    pub fn get(&self, name: &String) -> Option<EnvType> {
+    pub fn get(&self, name: &String) -> Option<EnvType<'a>> {
         self.variables.get(name).cloned()
     }
 
