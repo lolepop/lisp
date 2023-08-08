@@ -42,6 +42,8 @@ pub enum EnvType<'a> {
     Number(f64),
     Proc(ProcInfo<'a>),
     NativeProc(String),
+    Bool(bool),
+    String(String),
     // List(Vec<EnvType>),
 }
 
@@ -117,17 +119,20 @@ impl<'a> Env<'a> {
 
     pub fn std(&mut self) {
         let f = [
-            "*"
+            "*", "-", "<="
         ];
         for i in f {
             self.set(i.to_string(), EnvType::NativeProc(i.to_string()));
         }
         self.set("pi".to_string(), EnvType::Number(std::f64::consts::PI));
+        self.set("true".to_string(), EnvType::Bool(true));
+        self.set("false".to_string(), EnvType::Bool(false));
     }
 
     pub fn native_call(name: &String, args: ArgStack<'a>) -> Result<EnvType<'a>, String> {
         match name.as_str() {
             "*" => {
+                // (a: Number | String, b: Number) => 
                 let [a, b] = &args[..] else { return Err("incorrect args".to_string()); };
                 let a = match a {
                     EnvType::Number(a) => Ok(a),
@@ -138,6 +143,30 @@ impl<'a> Env<'a> {
                     _ => Err("not number".to_string())
                 }?;
                 Ok(EnvType::Number(a * b))
+            },
+            "-" => {
+                let [a, b] = &args[..] else { return Err("incorrect args".to_string()); };
+                let a = match a {
+                    EnvType::Number(a) => Ok(a),
+                    _ => Err("not number".to_string())
+                }?;
+                let b = match b {
+                    EnvType::Number(a) => Ok(a),
+                    _ => Err("not number".to_string())
+                }?;
+                Ok(EnvType::Number(a - b))
+            },
+            "<=" => {
+                let [a, b] = &args[..] else { return Err("incorrect args".to_string()); };
+                let a = match a {
+                    EnvType::Number(a) => Ok(a),
+                    _ => Err("not number".to_string())
+                }?;
+                let b = match b {
+                    EnvType::Number(a) => Ok(a),
+                    _ => Err("not number".to_string())
+                }?;
+                Ok(EnvType::Bool(a <= b))
             },
             _ => Err(format!("function {name} not found"))
         }

@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use std::collections::VecDeque;
 
 use env::{Env, EnvType, EnvId, EnvManager, ProcInfo};
@@ -134,7 +135,7 @@ impl Parser {
                 // println!("{env_manager:#?}");
                 panic!("instruction not found: {:?}", n);
             }
-            println!("{:?}: {:?}", n, val);
+            // println!("{:?}: {:?}", n, val);
             return val;
         }
 
@@ -153,7 +154,14 @@ impl Parser {
                 "lambda" => {
                     let args = body[1].unwrap_body().iter().map(|arg| arg.unwrap_leaf().unwrap_symbol().clone()).collect();
                     return Some(EnvType::Proc(ProcInfo::new(args, &body[2], env_id)));
-                }
+                },
+                "if" => {
+                    let condition = Self::eval(&body[1], env_manager, env_id);
+                    return match condition.unwrap() {
+                        EnvType::Bool(c) => Self::eval(&body[if c { 2 } else { 3 }], env_manager, env_id),
+                        c => panic!("bool expected, got {c:?}")
+                    }
+                },
                 _ => {}
             }
         }
@@ -165,10 +173,12 @@ impl Parser {
             let ret = Env::native_call(&name, args);
             return Some(ret.unwrap());
         } else if let Some(EnvType::Proc(proc)) = proc_ret {
+            // functions defined in language
             let scope = env_manager.new_env(Some(proc.captured()));
             // no lazy eval :(
             let arg_vals = body.iter().skip(1).map(|arg| Self::eval(arg, env_manager, env_id).unwrap()).collect::<Vec<_>>();
-
+            
+            // arguments set to name of arguments specified in lambda declaration
             let env = env_manager.get_mut(&scope);
             for (k, v) in proc.args().iter().zip(arg_vals) {
                 env.set(k.clone(), v);
@@ -184,7 +194,8 @@ impl Parser {
 }
 
 fn main() {
-    let test = "(define outer (lambda (a) (lambda (b) (* a b)))) ((outer 3) 2) ((outer 3) 3)".to_string();
+    // let test = "(define outer (lambda (a) (lambda (b) (* a b)))) ((outer 3) 2) ((outer 3) 3)".to_string();
+    let test = "(define fact (lambda (n) (if (<= n 1) 1 (* n (fact (- n 1)))))) (fact 100)".to_string();
     let mut tokens = Parser::tokenise(test);
     // println!("{tokens:?}");
     let ast = Parser::parse(&mut tokens);
