@@ -1,4 +1,4 @@
-#![allow(warnings)]
+// #![allow(warnings)]
 use std::collections::VecDeque;
 
 use env::{Env, EnvType, EnvId, EnvManager, ProcInfo};
