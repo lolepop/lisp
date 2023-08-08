@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
 
-use env::{Env, EnvType, EnvId, EnvManager};
+use env::{Env, EnvType, EnvId, EnvManager, ProcInfo};
 
 mod env;
 
 #[derive(Debug)]
-enum Node {
+pub enum Node {
     Symbol(String),
     Number(f64),
 }
@@ -26,7 +26,7 @@ impl Node {
 }
 
 #[derive(Debug)]
-enum AstNode {
+pub enum AstNode {
     Leaf(Node),
     Body(Vec<AstNode>),
 }
@@ -131,6 +131,7 @@ impl Parser {
             let val = n.resolve(env_manager, &env_id);
             if val.is_none() {
                 // string literal not found in env
+                // println!("{env_manager:#?}");
                 panic!("instruction not found: {:?}", n);
             }
             println!("{:?}: {:?}", n, val);
@@ -141,14 +142,18 @@ impl Parser {
 
         // handle if first token is keyword
         let t = body.first().unwrap();
-        if let AstNode::Leaf(n) = t {
-            match n.unwrap_symbol().as_str() {
+        if let AstNode::Leaf(_n @ Node::Symbol(n)) = t {
+            match n.as_str() {
                 "define" => {
                     let v = Self::eval(&body[2], env_manager, env_id).unwrap();
                     let env = env_manager.get_mut(&env_id);
                     env.set(body[1].unwrap_leaf().unwrap_symbol().clone(), v);
                     return None;
                 },
+                "lambda" => {
+                    let args = body[1].unwrap_body().iter().map(|arg| arg.unwrap_leaf().unwrap_symbol().clone()).collect();
+                    return Some(EnvType::Proc(ProcInfo::new(args, &body[2], env_id)));
+                }
                 _ => {}
             }
         }
@@ -159,6 +164,18 @@ impl Parser {
             let args = body[1..].iter().map(|a| Self::eval(a, env_manager, env_id).unwrap()).collect();
             let ret = Env::native_call(&name, args);
             return Some(ret.unwrap());
+        } else if let Some(EnvType::Proc(proc)) = proc_ret {
+            let scope = env_manager.new_env(Some(proc.captured()));
+            // no lazy eval :(
+            let arg_vals = body.iter().skip(1).map(|arg| Self::eval(arg, env_manager, env_id).unwrap()).collect::<Vec<_>>();
+
+            let env = env_manager.get_mut(&scope);
+            for (k, v) in proc.args().iter().zip(arg_vals) {
+                env.set(k.clone(), v);
+            }
+            
+            let ret = Self::eval(proc.body(), env_manager, scope);
+            return Some(ret.unwrap());
         }
 
         // arbitrarily nested stuff
@@ -167,11 +184,11 @@ impl Parser {
 }
 
 fn main() {
-    let test = "(define r 10) (* pi (* r r))".to_string();
+    let test = "(define outer (lambda (a) (lambda (b) (* a b)))) ((outer 3) 2) ((outer 3) 3)".to_string();
     let mut tokens = Parser::tokenise(test);
-    println!("{tokens:?}");
+    // println!("{tokens:?}");
     let ast = Parser::parse(&mut tokens);
-    println!("{ast:#?}");
+    // println!("{ast:#?}");
 
     let mut env_manager = EnvManager::new();
     let root_env = env_manager.std_env();

@@ -8,9 +8,27 @@ type ArgStack<'a> = Vec<EnvType<'a>>;
 
 #[derive(Debug)]
 pub struct ProcInfo<'a> {
-    args: u8,
+    args: Vec<String>,
     body: &'a Ast,
     captured: EnvId,
+}
+
+impl<'a> ProcInfo<'a> {
+    pub fn new(args: Vec<String>, body: &'a Ast, captured: EnvId) -> Self {
+        Self { args, body, captured }
+    }
+
+    pub fn body(&self) -> &'a Ast {
+        self.body
+    }
+
+    pub fn captured(&self) -> EnvId {
+        self.captured
+    }
+
+    pub fn args(&self) -> &Vec<String> {
+        self.args.as_ref()
+    }
 }
 
 impl<'a> Clone for ProcInfo<'a> {
@@ -22,7 +40,7 @@ impl<'a> Clone for ProcInfo<'a> {
 #[derive(Debug, Clone)]
 pub enum EnvType<'a> {
     Number(f64),
-    Proc(String, ProcInfo<'a>),
+    Proc(ProcInfo<'a>),
     NativeProc(String),
     // List(Vec<EnvType>),
 }
@@ -69,6 +87,9 @@ impl<'a> EnvManager<'a> {
 
     pub fn new_env(&mut self, parent: Option<EnvId>) -> EnvId {
         let id = self.counter;
+        if let Some(parent) = parent {
+            self.parents.insert(id, parent);
+        }
         let env = Env::new(EnvId(id), parent);
         self.envs.insert(id, env);
         self.counter += 1;
